@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbearia - Agendamento Dinâmico</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f7;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .admin-link {
+            margin-bottom: 20px;
+        }
+        
+        /* Estilos da Logo / Cabeçalho */
+        .logo-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .logo-container h1 {
+            font-size: 26px;
+            color: #000000;
+            margin: 0;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        .logo-container p {
+            color: #666;
+            font-size: 14px;
+            margin: 5px 0 0 0;
+        }
+
+        .container {
+            background: rgba(0, 0, 0, 0.938);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 450px;
+            margin-bottom: 20px;
+        }
+        h2, h3 {
+            color: #f8f7f7;
+            text-align: center;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #2ec201;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        /* Estilos para a grelha de horários (bolinhas/botões) */
+        .horarios-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .slot-horario {
+            padding: 10px;
+            border-radius: 20px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        /* Horário Livre (Aceso / Verde) */
+        .slot-livre {
+            background-color: #45d402;
+            color: rgb(245, 239, 239);
+        }
+        .slot-livre:hover {
+            background-color: #218838;
+            transform: scale(1.05);
+        }
+        /* Horário Selecionado */
+        .slot-selecionado {
+            background-color: #ffffff;
+            color: white;
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+        }
+        /* Horário Ocupado (Apagado / Cinzento) */
+        .slot-ocupado {
+            background-color: #e0e0e0;
+            color: #f8f7f7;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        button.btn-confirmar {
+            width: 100%;
+            background-color: #333;
+            color: rgb(248, 244, 244);
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button.btn-confirmar:hover {
+            background-color: #000000;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="admin-link">
+        <a href="admin.html">🔒 Acesso Restrito (Administrador)</a>
+    </div>
+
+    <!-- Logo Personalizada do Estabelecimento -->
+    <div class="logo-container">
+        <h1>💈 DOUGLAS</h1>
+        <p>O seu estilo em boas mãos</p>
+    </div>
+
+    <div class="container">
+        <h2>Faça o seu Agendamento</h2>
+        
+        <label for="nome">Nome do Cliente:</label>
+        <input type="text" id="nome" placeholder="Digite o seu nome">
+
+        <label for="servico">Serviço:</label>
+        <select id="servico">
+            <option value="Corte de Cabelo">Corte de Cabelo</option>
+            <option value="Barba">Barba</option>
+            <option value="Corte + Barba">Corte + Barba</option>
+        </select>
+
+        <label for="data-escolhida">Escolha a Data:</label>
+        <input type="date" id="data-escolhida" onchange="carregarHorariosDoDia()">
+
+        <label>Horários Disponíveis:</label>
+        <div id="grid-horarios" class="horarios-grid">
+            <p style="grid-column: span 3; text-align: center; color: #666;">Selecione uma data primeiro.</p>
+        </div>
+
+        <button class="btn-confirmar" onclick="criarAgendamento()">Confirmar Agendamento</button>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:8000";
+        let horarioSelecionado = null;
+
+        // Definir a data mínima como hoje no campo de data
+        document.getElementById("data-escolhida").valueAsDate = new Date();
+
+        // Lista de horários de atendimento padrão da barbearia
+        const horariosPossiveis = [
+            "09:00", "10:00", "11:00", "13:00", 
+            "14:00", "15:00", "16:00", "17:00", "18:00"
+        ];
+
+        async function carregarHorariosDoDia() {
+            const dataInput = document.getElementById("data-escolhida").value;
+            const grid = document.getElementById("grid-horarios");
+            grid.innerHTML = "";
+            horarioSelecionado = null;
+
+            if (!dataInput) return;
+
+            try {
+                // Vai buscar todos os agendamentos ao backend
+                const resposta = await fetch(`${API_URL}/agendamentos/`);
+                let agendamentosOcupados = [];
+
+                if (resposta.ok) {
+                    const todos = await resposta.json();
+                    // Filtra apenas os agendamentos do dia selecionado
+                    agendamentosOcupados = todos
+                        .filter(ag => ag.data_horario.startsWith(dataInput))
+                        .map(ag => {
+                            // Extrai apenas a hora no formato "HH:MM"
+                            const dataObj = new Date(ag.data_horario);
+                            return dataObj.toTimeString().substring(0, 5);
+                        });
+                }
+
+                // Cria as "bolinhas" / botões dinamicamente para cada horário
+                horariosPossiveis.forEach(hora => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.textContent = hora;
+                    btn.classList.add("slot-horario");
+
+                    if (agendamentosOcupados.includes(hora)) {
+                        // Está ocupado -> Apagado e bloqueado
+                        btn.classList.add("slot-ocupado");
+                        btn.disabled = true;
+                    } else {
+                        // Está livre -> Aceso e clicável
+                        btn.classList.add("slot-livre");
+                        btn.onclick = () => selecionarHorario(btn, hora);
+                    }
+
+                    grid.appendChild(btn);
+                });
+
+            } catch (erro) {
+                console.error("Erro ao carregar horários:", erro);
+                grid.innerHTML = "<p style='grid-column: span 3; color: red;'>Erro ao comunicar com o servidor.</p>";
+            }
+        }
+
+        function selecionarHorario(elementoBtn, hora) {
+            // Remove a seleção anterior de qualquer outro botão
+            document.querySelectorAll(".slot-livre").forEach(b => b.classList.remove("slot-selecionado"));
+            
+            // Marca o atual como selecionado
+            elementoBtn.classList.add("slot-selecionado");
+            horarioSelecionado = hora;
+        }
+
+        async function criarAgendamento() {
+            const nome = document.getElementById("nome").value;
+            const servico = document.getElementById("servico").value;
+            const dataInput = document.getElementById("data-escolhida").value;
+
+            if (!nome || !dataInput || !horarioSelecionado) {
+                alert("Por favor, preenche o teu nome, escolhe uma data e clica num horário disponível!");
+                return;
+            }
+
+            // Junta a data selecionada com a hora escolhida (Formato ISO: YYYY-MM-DDTHH:MM:00)
+            const dataHoraCompleta = `${dataInput}T${horarioSelecionado}:00`;
+
+            const dadosAgendamento = {
+                nome_cliente: nome,
+                servico: servico,
+                data_horario: dataHoraCompleta
+            };
+
+            try {
+                const resposta = await fetch(`${API_URL}/agendamento/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(dadosAgendamento)
+                });
+
+                if (resposta.ok) {
+                    alert("Agendamento efetuado com sucesso! Esperamos por ti.");
+                    document.getElementById("nome").value = "";
+                    horarioSelecionado = null;
+                    carregarHorariosDoDia(); // Atualiza a grelha de horários na hora
+                } else {
+                    const erroData = await resposta.json();
+                    alert("Erro ao agendar: " + (erroData.detail || "Horário indisponível."));
+                    carregarHorariosDoDia();
+                }
+            } catch (erro) {
+                console.error("Erro na requisição:", erro);
+                alert("Não foi possível ligar ao servidor.");
+            }
+        }
+
+        // Carrega os horários do dia atual assim que a página abre
+        window.onload = function() {
+            carregarHorariosDoDia();
+        };
+    </script>
+
+</body>
+</html>

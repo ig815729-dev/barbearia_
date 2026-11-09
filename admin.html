@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel ADM - Barbearia</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #111; color: #f4f4f9; }
+        h1 { color: #d8aa12; text-align: center; }
+        .card { background: #222; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); margin-bottom: 20px; border: 1px solid #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #333; font-size: 0.9rem; }
+        th { color: #d4af37; }
+        button { padding: 6px 12px; background: #c0392b; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #962d22; }
+        .btn-voltar { background: #555; margin-bottom: 20px; display: inline-block; padding: 10px 15px; color: white; text-decoration: none; border-radius: 4px; }
+        .btn-voltar:hover { background: #666; }
+    </style>
+</head>
+<body>
+
+    <a href="index.html" class="btn-voltar">← Voltar à Página Principal</a>
+    <h1>Painel de Controlo - ADM</h1>
+
+    <div class="card">
+        <h2>Lista de Marcações</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Cliente</th>
+                    <th>Serviço</th>
+                    <th>Data e Hora</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="tabela-agendamentos">
+                <!-- Os dados entram aqui dinamicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:8000";
+
+        async function carregarPainelAdmin() {
+            try {
+                const resposta = await fetch(`${API_URL}/agendamentos/`);
+                const dados = await resposta.json();
+                
+                const tabela = document.getElementById("tabela-agendamentos");
+                tabela.innerHTML = "";
+                
+                if (dados.length === 0) {
+                    tabela.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #888;">Sem agendamentos de momento.</td></tr>`;
+                    return;
+                }
+
+                dados.forEach(item => {
+                    const dataFormatada = new Date(item.data_horario).toLocaleString('pt-PT');
+                    
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td>#${item.id}</td>
+                        <td>${item.nome_cliente}</td>
+                        <td>${item.servico}</td>
+                        <td>${dataFormatada}</td>
+                        <td><button onclick="apagarAgendamento(${item.id})">Concluir / Apagar</button></td>
+                    `;
+                    tabela.appendChild(tr);
+                });
+            } catch (erro) {
+                console.error("Erro ao carregar painel:", erro);
+            }
+        }
+
+        async function apagarAgendamento(id) {
+            if (!confirm(`Tens a certeza que pretendes remover o agendamento #${id}?`)) return;
+
+            try {
+                const resposta = await fetch(`${API_URL}/agendamento/${id}`, {
+                    method: "DELETE"
+                });
+
+                if (resposta.ok) {
+                    alert("Agendamento removido com sucesso!");
+                    carregarPainelAdmin();
+                } else {
+                    alert("Erro ao apagar o agendamento.");
+                }
+            } catch (erro) {
+                console.error("Erro:", erro);
+            }
+        }
+
+        carregarPainelAdmin();
+    </script>
+</body>
+</html>
