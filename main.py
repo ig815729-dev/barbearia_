@@ -1,5 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+import os
+import secrets
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Integer, String, DateTime
@@ -52,6 +55,20 @@ def obter_db():
     finally:
         db.close()
 
+seguranca = HTTPBasic()
+
+def verificar_admin(credenciais: HTTPBasicCredentials = Depends(seguranca)):
+    usuario = os.getenv("ADMIN_USER", "admin")
+    senha = os.getenv("ADMIN_PASSWORD", "")
+    usuario_ok = secrets.compare_digest(credenciais.username.encode(), usuario.encode())
+    senha_ok = secrets.compare_digest(credenciais.password.encode(), senha.encode())
+    if not senha or not (usuario_ok and senha_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Acesso negado",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
 # 5. Rotas da API
 
 @app.post("/agendamento/", status_code=status.HTTP_201_CREATED)
@@ -75,7 +92,7 @@ def criar_agendamento(agendamento: AgendamentoSchema, db: Session = Depends(obte
 def listar_agendamentos(db: Session = Depends(obter_db)):
     return db.query(AgendamentoDB).all()
 
-@app.delete("/agendamento/{agendamento_id}")
+@app.delete("/agendamento/{agendamento_id}", dependencies=[Depends(verificar_admin)])
 def apagar_agendamento(agendamento_id: int, db: Session = Depends(obter_db)):
     agendamento = db.query(AgendamentoDB).filter(AgendamentoDB.id == agendamento_id).first()
     if not agendamento:
@@ -85,7 +102,7 @@ def apagar_agendamento(agendamento_id: int, db: Session = Depends(obter_db)):
     db.commit()
     return {"mensagem": "Agendamento apagado com sucesso!"}
 
-@app.put('/agendamento/{agendamento_id}')
+@app.put('/agendamento/{agendamento_id}', dependencies=[Depends(verificar_admin)])
 def atualizar_agendamento(agendamento_id: int, dados_atualizados: AgendamentoSchema, db: Session = Depends(obter_db)):
     agendamento = db.query(AgendamentoDB).filter(AgendamentoDB.id == agendamento_id).first()
     
@@ -111,6 +128,6 @@ def atualizar_agendamento(agendamento_id: int, dados_atualizados: AgendamentoSch
 def pagina_inicial():
     return FileResponse("index.html")
 
-@app.get("/admin")
+@app.get("/admin", dependencies=[Depends(verificar_admin)])
 def pagina_admin():
     return FileResponse("admin.html")
