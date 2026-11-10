@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Integer, String, DateTime
@@ -105,3 +106,11 @@ def atualizar_agendamento(agendamento_id: int, dados_atualizados: AgendamentoSch
         'mensagem': f'Agendamento com o ID {agendamento_id} foi atualizado com sucesso!',
         'dados_atualizados': agendamento
     }
+    
+@app.get("/")
+def pagina_inicial():
+    return FileResponse("index.html")
+
+@app.get("/admin")
+def pagina_admin():
+    return FileResponse("admin.html")
